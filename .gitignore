@@ -1,0 +1,19 @@
+# Datasets
+datasets/
+
+# Checkpoints and logs
+output/
+weights/*.pth
+*.pth
+*.pt
+
+# Environment files
+.conda/
+.venv/
+*.pyc
+__pycache__/
+
+# OS generated files
+.DS_Store
+.ipynb_checkpoints/
+*.log
