@@ -1,13 +1,13 @@
 __include__: [
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/coco_detection.yml',
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/configs/runtime.yml',
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/dataloader.yml',
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/optimizer.yml',
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/rtdetrv2_r50vd.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/coco_detection.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/runtime.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/dataloader.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/optimizer.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/rtdetrv2_r50vd.yml',
 ]
 
 
-output_dir: /home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/output/rtdetrv2_dds_disk_smooth_with_weight
+output_dir: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/output/rtdetrv2_dds_disk_smooth_with_weight
 
 
 
@@ -25,5 +25,5 @@ optimizer:
   betas: [0.9, 0.999]
   weight_decay: 0.0001
 
-weight: /home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/weights/rtdetrv2_r50vd_6x_coco_ema.pth # manually added
+weight: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/weights/rtdetrv2_r50vd_6x_coco_ema.pth # manually added
 print_freq: 100 
