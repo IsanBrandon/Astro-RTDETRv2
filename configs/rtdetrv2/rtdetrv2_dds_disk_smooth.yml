@@ -27,3 +27,4 @@ optimizer:
 
 weight: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/weights/rtdetrv2_r50vd_6x_coco_ema.pth # manually added
 print_freq: 100 
+checkpoint_freq: 20
