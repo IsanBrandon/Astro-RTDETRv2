@@ -1,9 +1,9 @@
 __include__: [
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/coco_detection.yml',
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/configs/runtime.yml',
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/dataloader.yml',
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/optimizer.yml',
-  '/home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/rtdetrv2_r50vd.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/coco_detection.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/runtime.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/dataloader.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/optimizer.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/rtdetrv2_r50vd.yml',
 ]
 
 
