@@ -161,7 +161,6 @@ def main(args, ):
     # -------------------------------------------------------------------
 
     for im_idx, im_path in enumerate(image_paths):
-        # print(f"Processing image {im_idx + 1}/{len(image_paths)}: {os.path.basename(im_path)}")
         im_pil = Image.open(im_path).convert('RGB')
         w, h = im_pil.size
         orig_size = torch.tensor([w, h])[None].to(args.device)
@@ -170,8 +169,6 @@ def main(args, ):
 
         output = model(im_data, orig_size)
         labels, boxes, scores = output
-
-        # --- 디버깅 정보 출력 섹션 제거됨 ---
 
         output_filename = os.path.join(args.save_dir, f'detected_{os.path.basename(im_path)}')
         
