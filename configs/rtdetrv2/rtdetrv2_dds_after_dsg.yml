@@ -7,7 +7,7 @@ __include__: [
 ]
 
 
-output_dir: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/output/rtdetrv2_dds_disk_smooth_with_weight
+output_dir: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/output/rtdetrv2_dds_after_dsg
 
 
 
