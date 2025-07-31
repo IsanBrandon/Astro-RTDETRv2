@@ -1,0 +1,83 @@
+# /home/uvll/Desktop/hyuk/rtdetr/rtdetrv2_pytorch/configs/runtime_astro.yml
+
+print_freq: 100
+output_dir: './logs' # 이 디렉토리는 rtdetrv2_r50vd_6x_astro.yml의 output_dir과 일치해야 합니다.
+checkpoint_freq: 20
+
+sync_bn: True
+find_unused_parameters: False
+
+use_amp: False
+scaler:
+  type: GradScaler
+  enabled: True
+
+use_ema: False
+ema:
+  type: ModelEMA
+  decay: 0.9999
+  warmups: 2000
+
+# --- Astro-YOLO: Criterion(손실 함수) 설정 추가 ---
+criterion:
+  type: RTDETRCriterionv2 # 이전에 수정한 Criterion 클래스
+  matcher: # 매처 설정 (이전과 동일하게 유지)
+    type: HungarianMatcher
+    cost_class: 2.
+    cost_bbox: 5.
+    cost_giou: 2.
+    alpha: 0.25 # Focal Loss (cost_class)와 관련된 매처 파라미터
+    gamma: 2.0  # Focal Loss (cost_class)와 관련된 매처 파라미터
+  weight_dict: # 각 손실의 가중치
+    loss_focal: 1.0       # Dsg (star/galaxy) 분류 손실
+    loss_bbox: 5.0        # 바운딩 박스 L1 손실
+    loss_giou: 2.0        # GIoU 손실
+    loss_galaxy_type: 1.0 # Astro-YOLO: 은하 타입 분류 손실
+
+    # 보조 손실(aux_outputs) 가중치 (RTDETRTransformerv2의 num_layers - 1 만큼 필요)
+    # decoder가 6 레이어이므로 aux_outputs는 5개 (0부터 4까지)
+    loss_focal_aux_0: 0.4
+    loss_bbox_aux_0: 2.0
+    loss_giou_aux_0: 0.8
+    loss_galaxy_type_aux_0: 0.4 # Astro-YOLO: 은하 타입 보조 손실
+
+    loss_focal_aux_1: 0.4
+    loss_bbox_aux_1: 2.0
+    loss_giou_aux_1: 0.8
+    loss_galaxy_type_aux_1: 0.4
+
+    loss_focal_aux_2: 0.4
+    loss_bbox_aux_2: 2.0
+    loss_giou_aux_2: 0.8
+    loss_galaxy_type_aux_2: 0.4
+
+    loss_focal_aux_3: 0.4
+    loss_bbox_aux_3: 2.0
+    loss_giou_aux_3: 0.8
+    loss_galaxy_type_aux_3: 0.4
+
+    loss_focal_aux_4: 0.4
+    loss_bbox_aux_4: 2.0
+    loss_giou_aux_4: 0.8
+    loss_galaxy_type_aux_4: 0.4
+
+    # 인코더 보조 손실(enc_aux_outputs) 가중치 (enc_aux_outputs는 galaxy_types 손실 없음)
+    # 인코더 레이어 수 (HybridEncoder: num_encoder_layers: 1)에 따라 달라집니다.
+    # num_encoder_layers가 1이면 aux_outputs는 1개
+    loss_focal_enc_0: 0.4
+    loss_bbox_enc_0: 2.0
+    loss_giou_enc_0: 0.8
+
+  # 계산할 손실 목록 (losses 리스트에 "galaxy_types" 추가)
+  losses: ["focal", "boxes", "giou", "galaxy_types"] # <-- 'focal'과 'galaxy_types' 포함
+  alpha: 0.75 # Focal Loss 파라미터 (유지)
+  gamma: 2.0  # Focal Loss 파라미터 (유지)
+
+  # Astro-YOLO: 'galaxy' 클래스 ID 추가 (Dsg에서 1로 매핑)
+  galaxy_class_id: 1
+
+# --- Astro-YOLO: Solver (해당 Solver는 DetSolver_astro.py에 정의되어 있음) ---
+# 이 부분은 DetSolver_astro가 DetSolver로 등록되어 있다면 자동으로 주입됩니다.
+# 만약 main 함수 등에서 Solver 타입을 명시적으로 지정해야 한다면, 여기에 추가합니다.
+# solver:
+#   type: DetSolver # DetSolver_astro.py에 정의된 클래스 이름 (register 데코레이터에 의해)

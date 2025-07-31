@@ -1,0 +1,87 @@
+# --- Astro-YOLO: Dsg 훈련용 데이터로더 ---
+train_dataloader_sg: # DetSolver의 train_dataloader_sg 인자로 주입될 이름
+  type: DataLoader
+  dataset:
+    type: AstroSgDataset # 이전에 구현한 AstroSgDataset 사용
+    img_folder: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/images/train2017  # Dsg 훈련 이미지 폴더 경로 (실제 경로로 변경 필요)
+    ann_file: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/annotations/instances_train2017.json # Dsg 훈련 어노테이션 파일 경로 (실제 경로로 변경 필요)
+    transforms:
+      type: Compose
+      transforms:
+        # Astro-YOLO 논문의 데이터 증강 전략에 맞춰 transforms를 설정합니다.
+        # RandomIoUCrop의 p 값은 필요에 따라 조정 가능
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomZoomOut, fill: 0, p: 0.5} # Mosaic 및 Mixup과 함께 사용 시 p 값 조정
+        - {type: RandomIoUCrop, p: 0.8} # Intersection over Union 기반 크롭
+        - {type: SanitizeBoundingBoxes, min_size: 1} # 작은 박스 제거
+        - {type: RandomHorizontalFlip, p: 0.5}
+        - {type: Resize, size: [512, 512]} # Dsg 이미지 크기 512x512 또는 모델 입력 크기로 조정
+        - {type: SanitizeBoundingBoxes, min_size: 1} # Resize 후 다시 작은 박스 제거
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}   
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+  collate_fn:
+    type: BatchImageCollateFuncion # 기본 콜레이트 함수 (여기서 Mosaic/Mixup을 직접 호출한다면 수정 필요)
+    # scales, stop_epoch은 transforms.policy와 연동되므로 여기서는 제거합니다.
+  shuffle: True
+  batch_size: 16 # total_batch_size 대신 batch_size 사용
+  num_workers: 4
+  drop_last: True # 마지막 불완전한 배치 버리기
+
+# --- Astro-YOLO: Dds 훈련용 데이터로더 ---
+train_dataloader_ds: # DetSolver의 train_dataloader_ds 인자로 주입될 이름
+  type: DataLoader
+  dataset:
+    type: AstroDsDataset # 이전에 구현한 AstroDsDataset 사용
+    img_folder: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/images/train2017 # Dds 훈련 이미지 폴더 경로 (실제 경로로 변경 필요)
+    ann_file: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/annotations/instances_train2017.json # Dds 훈련 어노테이션 파일 경로 (실제 경로로 변경 필요)
+    transforms:
+      type: Compose
+      transforms:
+        # Astro-YOLO 논문의 Dds 데이터 전처리(중앙 크롭 등) 및 증강 전략에 맞춰 설정
+        - {type: RandomPhotometricDistort, p: 0.5}
+        - {type: RandomHorizontalFlip, p: 0.5}
+        # Dds는 원본 424x424이므로, 모델 입력 크기에 맞춰 리사이즈.
+        # 논문에서 언급된 '중앙 크롭' 효과를 내기 위해 Resize와 함께 RandomCrop 등을 고려할 수 있습니다.
+        - {type: Resize, size: [512, 512]} # 모델 입력 크기에 맞춤
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True} # Dds도 박스 정보가 있으므로 필요
+  collate_fn:
+    type: BatchImageCollateFuncion
+  shuffle: True
+  batch_size: 16
+  num_workers: 4
+  drop_last: True
+
+# --- Astro-YOLO: Dsg 평가용 데이터로더 ---
+val_dataloader_sg: # DetSolver의 val_dataloader 인자로 주입될 이름
+  type: DataLoader
+  dataset:
+    type: AstroSgDataset
+    img_folder: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/images/val2017 # Dsg 평가 이미지 폴더 경로 (실제 경로로 변경 필요)
+    ann_file: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/annotations/instances_val2017.json # Dsg 평가 어노테이션 파일 경로 (실제 경로로 변경 필요)
+    transforms:
+      type: Compose
+      transforms:
+        - {type: Resize, size: [512, 512]} # 평가 시에는 고정된 크기 사용
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True}
+  shuffle: False
+  batch_size: 16
+  num_workers: 4
+
+# --- Astro-YOLO: Dds 평가용 데이터로더 ---
+val_dataloader_ds: # DetSolver의 val_dataloader_ds 인자로 주입될 이름
+  type: DataLoader
+  dataset:
+    type: AstroDsDataset
+    img_folder: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/images/val2017 # Dds 평가 이미지 폴더 경로 (실제 경로로 변경 필요)
+    ann_file: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/annotations/instances_val2017.json # Dds 평가 어노테이션 파일 경로 (실제 경로로 변경 필요)
+    transforms:
+      type: Compose
+      transforms:
+        - {type: Resize, size: [512, 512]} # 평가 시에는 고정된 크기 사용
+        - {type: ConvertPILImage, dtype: 'float32', scale: True}
+        - {type: ConvertBoxes, fmt: 'cxcywh', normalize: True} # Dds도 박스 정보가 있으므로 필요
+  shuffle: False
+  batch_size: 16
+  num_workers: 4

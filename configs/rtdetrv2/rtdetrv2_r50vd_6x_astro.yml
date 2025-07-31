@@ -1,0 +1,29 @@
+__include__: [
+  # 기존 coco_detection.yml 대신, AstroSgDataset 및 AstroDsDataset을 정의한 파일을 포함합니다.
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/coco_detection.yml', # Dsg 데이터셋 설정 (새로 생성)
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/coco_detection.yml', # Dds 데이터셋 설정 (새로 생성)
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/runtime_astro.yml',           # Astro-YOLO에 맞춰 수정한 런타임 설정 (새로 생성)
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/dataloader_astro.yml', # Astro-YOLO에 맞춰 수정한 데이터로더 설정 (새로 생성)
+  './include/optimizer.yml',        # 옵티마이저는 그대로 사용할 수 있습니다.
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/rtdetrv2_r50vd_astro.yml', # Astro-YOLO 모델 설정을 포함합니다 (새로 생성)
+]
+
+
+output_dir: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/output/rtdetrv2_r50vd_6x_astro
+
+
+
+optimizer:
+  type: AdamW
+  params: 
+    - 
+      params: '^(?=.*backbone)(?!.*norm).*$'
+      lr: 0.00001
+    - 
+      params: '^(?=.*(?:encoder|decoder))(?=.*(?:norm|bn)).*$'
+      weight_decay: 0.
+
+  lr: 0.0001
+  betas: [0.9, 0.999]
+  weight_decay: 0.0001
+

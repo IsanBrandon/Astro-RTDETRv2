@@ -34,6 +34,7 @@ def draw(images, labels, boxes, scores, class_names, task, thrh = 0.6, output_fi
 
         # 3. Filter detections by confidence threshold
         valid_indices = np.where(scr > thrh)[0]
+        print(f"Valid detections count for {os.path.basename(output_filename)}: {len(valid_indices)}") # 유효 감지 수 확인 (for 디버깅용)
         
         # 유효한 탐지가 없을 경우
         if len(valid_indices) == 0:
@@ -81,6 +82,7 @@ def draw(images, labels, boxes, scores, class_names, task, thrh = 0.6, output_fi
 
         # 8. Save image
         im.save(output_filename)
+        print(f"Image saved to: {output_filename}") # 파일이 실제로 저장되는지 확인 (for 디버깅용)
 
 
 def main(args, ):
@@ -160,24 +162,52 @@ def main(args, ):
         raise ValueError("Class names could not be determined. Please check your config path or define class names explicitly.")
     # -------------------------------------------------------------------
 
-    for im_idx, im_path in enumerate(image_paths):
-        im_pil = Image.open(im_path).convert('RGB')
-        w, h = im_pil.size
-        orig_size = torch.tensor([w, h])[None].to(args.device)
+    # for im_idx, im_path in enumerate(image_paths):
+    #     im_pil = Image.open(im_path).convert('RGB')
+    #     w, h = im_pil.size
+    #     orig_size = torch.tensor([w, h])[None].to(args.device)
 
-        im_data = transforms(im_pil)[None].to(args.device)
+    #     im_data = transforms(im_pil)[None].to(args.device)
 
-        output = model(im_data, orig_size)
-        labels, boxes, scores = output
+    #     output = model(im_data, orig_size)
+    #     labels, boxes, scores = output
 
-        output_filename = os.path.join(args.save_dir, f'detected_{os.path.basename(im_path)}')
+    #     output_filename = os.path.join(args.save_dir, f'detected_{os.path.basename(im_path)}')
         
-        draw([im_pil], labels, boxes, scores, 
-             class_names=current_class_names, 
-             task=task_to_visualize,          
-             thrh=args.threshold, 
-             output_filename=output_filename)
+    #     draw([im_pil], labels, boxes, scores, 
+    #          class_names=current_class_names, 
+    #          task=task_to_visualize,          
+    #          thrh=args.threshold, 
+    #          output_filename=output_filename)
+    # main 함수 내에서 이미지 루프 시작 직전:
+    print(f"총 {len(image_paths)}개의 이미지를 처리할 예정입니다.")
 
+    for im_idx, im_path in enumerate(image_paths):
+        print(f"이미지 처리 중: {im_path}") # 이 부분이 출력되는지 확인
+        try:
+            im_pil = Image.open(im_path).convert('RGB')
+            w, h = im_pil.size
+            orig_size = torch.tensor([w, h])[None].to(args.device)
+
+            im_data = transforms(im_pil)[None].to(args.device)
+
+            output = model(im_data, orig_size)
+            labels, boxes, scores = output
+
+            output_filename = os.path.join(args.save_dir, f'detected_{os.path.basename(im_path)}')
+
+            # draw 함수 호출 직전
+            print(f"draw 함수 호출: {output_filename}, threshold={args.threshold}, scores_min={scores.min().item()}, scores_max={scores.max().item()}")
+
+            draw([im_pil], labels, boxes, scores, 
+                class_names=current_class_names, 
+                task=task_to_visualize,          
+                thrh=args.threshold, 
+                output_filename=output_filename)
+
+        except Exception as e:
+            print(f"Error processing {im_path}: {e}") # 여기서 오류가 나는지 확인
+            continue
     
 if __name__ == '__main__':
     import argparse
