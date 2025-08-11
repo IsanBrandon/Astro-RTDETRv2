@@ -34,20 +34,16 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     ema :ModelEMA = kwargs.get('ema', None)
     scaler :GradScaler = kwargs.get('scaler', None)
     lr_warmup_scheduler :Warmup = kwargs.get('lr_warmup_scheduler', None)
-    
-    is_dsg_epoch = kwargs.get('is_dsg_epoch', True)
 
     for i, (samples, targets) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
         samples = samples.to(device)
         targets = [{k: v.to(device) for k, v in t.items()} for t in targets]
         global_step = epoch * len(data_loader) + i
-        
-        # 모델과 criterion에 is_dsg_epoch 플래그를 전달합니다.
-        metas = dict(epoch=epoch, step=i, global_step=global_step, is_dsg_epoch=is_dsg_epoch)
+        metas = dict(epoch=epoch, step=i, global_step=global_step)
 
         if scaler is not None:
             with torch.autocast(device_type=str(device), cache_enabled=True):
-                outputs = model(samples, targets=targets, is_dsg_epoch=is_dsg_epoch)
+                outputs = model(samples, targets=targets)
             
             with torch.autocast(device_type=str(device), enabled=False):
                 loss_dict = criterion(outputs, targets, **metas)
@@ -64,7 +60,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
             optimizer.zero_grad()
 
         else:
-            outputs = model(samples, targets=targets, is_dsg_epoch=is_dsg_epoch)
+            outputs = model(samples, targets=targets)
             loss_dict = criterion(outputs, targets, **metas)
             
             loss : torch.Tensor = sum(loss_dict.values())

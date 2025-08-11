@@ -1,5 +1,6 @@
 __include__: [
   '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/coco_detection.yml',
+  '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/coco_detection.yml',
   '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/runtime.yml',
   '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/dataloader.yml',
   '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/configs/rtdetrv2/include/optimizer.yml',
@@ -7,7 +8,7 @@ __include__: [
 ]
 
 
-output_dir: /home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/output/rtdetrv2_dsg_star_galaxy_2nd
+output_dir: /home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/output/rtdetrv2_multi_star_galaxies
 
 
 
@@ -26,3 +27,34 @@ optimizer:
   weight_decay: 0.0001
 
 weight: /home/uvll/Desktop/hyuk/rtdetr/RT-DETR/rtdetr_pytorch/rtdetrv2_pytorch/weights/rtdetrv2_r50vd_6x_coco_ema.pth # manually added
+
+
+# Dsg 데이터셋 설정 (기존 train_dataloader를 오버라이드)
+train_dataloader: 
+  dataset:
+    type: 'CocoDataset'
+    img_folder: '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/images/train2017'
+    ann_file: '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/annotations/instances_train2017.json'
+    # transforms는 dataloader.yml에서 상속받음
+  # 나머지 설정(shuffle, total_batch_size, num_workers)은 dataloader.yml에서 상속받음
+
+# Dds 데이터셋을 위한 새로운 데이터로더 설정
+# Dds는 train_dataloader_dds라는 이름으로 별도 정의
+train_dataloader_dds:
+  dataset:
+    type: 'CocoDataset'
+    img_folder: '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/images/train2017'
+    ann_file: '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dds/annotations/instances_train2017.json'
+    # transforms는 dataloader.yml에서 상속받음
+  shuffle: True
+  total_batch_size: 16
+  num_workers: 4
+
+# 검증용 데이터로더는 Dsg 데이터셋으로 그대로 사용
+val_dataloader:
+  dataset:
+    type: 'CocoDataset'
+    img_folder: '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/images/val2017'
+    ann_file: '/home/uvll/Desktop/hyuk/rtdetr/rtdetr_pytorch/rtdetrv2_pytorch/datasets/Dsg/annotations/instances_val2017.json'
+    # transforms는 dataloader.yml에서 상속받음
+  # 나머지 설정은 dataloader.yml에서 상속받음

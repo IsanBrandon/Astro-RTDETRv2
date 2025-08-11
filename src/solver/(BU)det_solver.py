@@ -22,16 +22,6 @@ class DetSolver(BaseSolver):
 
         n_parameters = sum([p.numel() for p in self.model.parameters() if p.requires_grad])
         print(f'number of trainable parameters: {n_parameters}')
-        
-        # BaseSolver의 패턴에 맞춰 두 데이터로더를 초기화합니다.
-        # Dsg 데이터셋을 위한 데이터로더
-        self.train_dataloader_dsg = dist_utils.warp_loader(self.cfg.train_dataloader, 
-                                                            shuffle=self.cfg.train_dataloader.shuffle)
-        
-        # Dds 데이터셋을 위한 데이터로더
-        # rtdetrv2_multi_star_galaxies.yml 파일에 train_dataloader_dds라는 키를 추가했다고 가정합니다.
-        self.train_dataloader_dds = dist_utils.warp_loader(self.cfg.train_dataloader_dds,
-                                                            shuffle=self.cfg.train_dataloader_dds.shuffle)
 
         best_stat = {'epoch': -1, }
 
@@ -39,31 +29,19 @@ class DetSolver(BaseSolver):
         start_epcoch = self.last_epoch + 1
         
         for epoch in range(start_epcoch, args.epoches):
-            # 교대 훈련 로직
-            if epoch % 2 == 0:
-                # 짝수 에포크: Dsg 데이터셋으로 훈련 (star vs galaxy)
-                current_dataloader = self.train_dataloader_dsg
-                is_dsg_epoch = True
-            else:
-                # 홀수 에포크: Dds 데이터셋으로 훈련 (smooth vs disk)
-                current_dataloader = self.train_dataloader_dds
-                is_dsg_epoch = False
 
-            # self.train_dataloader.set_epoch(epoch)
+            self.train_dataloader.set_epoch(epoch)
             # self.train_dataloader.dataset.set_epoch(epoch)
-            # if dist_utils.is_dist_available_and_initialized():
-            #     self.train_dataloader.sampler.set_epoch(epoch)
             if dist_utils.is_dist_available_and_initialized():
-                current_dataloader.sampler.set_epoch(epoch)
+                self.train_dataloader.sampler.set_epoch(epoch)
             
             train_stats = train_one_epoch(
                 self.model, 
                 self.criterion, 
-                current_dataloader,  # 선택된 데이터로더를 사용
+                self.train_dataloader, 
                 self.optimizer, 
                 self.device, 
                 epoch, 
-                is_dsg_epoch=is_dsg_epoch, # is_dsg_epoch 플래그 전달
                 max_norm=args.clip_max_norm, 
                 print_freq=args.print_freq, 
                 ema=self.ema, 
@@ -85,13 +63,12 @@ class DetSolver(BaseSolver):
                 for checkpoint_path in checkpoint_paths:
                     dist_utils.save_on_master(self.state_dict(), checkpoint_path)
 
-            # 평가 시에는 Dsg 데이터셋으로 평가를 진행합니다.
             module = self.ema.module if self.ema else self.model
             test_stats, coco_evaluator = evaluate(
                 module, 
                 self.criterion, 
                 self.postprocessor, 
-                self.val_dataloader,    # Dsg 데이터셋을 사용하여 평가
+                self.val_dataloader, 
                 self.evaluator, 
                 self.device
             )

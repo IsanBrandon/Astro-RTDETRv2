@@ -137,60 +137,49 @@ class RTDETRCriterionv2(nn.Module):
         return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
 
     def forward(self, outputs, targets, **kwargs):
-        is_dsg_epoch = kwargs.get('is_dsg_epoch', True)
+        """ This performs the loss computation.
+        Parameters:
+             outputs: dict of tensors, see the output specification of the model for the format
+             targets: list of dicts, such that len(targets) == batch_size.
+                      The expected keys in each dict depends on the losses applied, see each loss' doc
+        """
         outputs_without_aux = {k: v for k, v in outputs.items() if 'aux' not in k}
 
+        # Compute the average number of target boxes accross all nodes, for normalization purposes
         num_boxes = sum(len(t["labels"]) for t in targets)
         num_boxes = torch.as_tensor([num_boxes], dtype=torch.float, device=next(iter(outputs.values())).device)
         if is_dist_available_and_initialized():
             torch.distributed.all_reduce(num_boxes)
         num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
-    
-        original_num_classes = self.num_classes
-
-        # --- 메인 헤드 손실 계산 ---
-        if not is_dsg_epoch:
-            self.num_classes = 2
-    
+        
+        # Retrieve the matching between the outputs of the last layer and the targets
         matched = self.matcher(outputs_without_aux, targets)
         indices = matched['indices']
-    
+
+        # Compute all the requested losses
         losses = {}
         for loss in self.losses:
             meta = self.get_loss_meta_info(loss, outputs, targets, indices)            
             l_dict = self.get_loss(loss, outputs, targets, indices, num_boxes, **meta)
             l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
             losses.update(l_dict)
-    
-        # --- 보조 손실 계산 (aux_outputs) ---
+
+        # In case of auxiliary losses, we repeat this process with the output of each intermediate layer.
         if 'aux_outputs' in outputs:
             for i, aux_outputs in enumerate(outputs['aux_outputs']):
-                # 이 보조 헤드를 위한 num_classes를 동적으로 설정합니다.
-                if not is_dsg_epoch:
-                    self.num_classes = 2
-            
                 if not self.share_matched_indices:
                     matched = self.matcher(aux_outputs, targets)
                     indices = matched['indices']
-            
                 for loss in self.losses:
                     meta = self.get_loss_meta_info(loss, aux_outputs, targets, indices)
                     l_dict = self.get_loss(loss, aux_outputs, targets, indices, num_boxes, **meta)
                     l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
                     l_dict = {k + f'_aux_{i}': v for k, v in l_dict.items()}
                     losses.update(l_dict)
-            
-                # 각 보조 헤드 계산 후 num_classes를 복원합니다.
-                self.num_classes = original_num_classes
 
-        # --- CDN 보조 손실 계산 (dn_aux_outputs) ---
+        # In case of cdn auxiliary losses. For rtdetr
         if 'dn_aux_outputs' in outputs:
             assert 'dn_meta' in outputs, ''
-        
-            # 이 보조 헤드를 위한 num_classes를 동적으로 설정합니다.
-            if not is_dsg_epoch:
-                self.num_classes = 2
-        
             indices = self.get_cdn_matched_indices(outputs['dn_meta'], targets)
             dn_num_boxes = num_boxes * outputs['dn_meta']['dn_num_group']
             for i, aux_outputs in enumerate(outputs['dn_aux_outputs']):
@@ -200,25 +189,19 @@ class RTDETRCriterionv2(nn.Module):
                     l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
                     l_dict = {k + f'_dn_{i}': v for k, v in l_dict.items()}
                     losses.update(l_dict)
-        
-            # 보조 헤드 계산 후 num_classes를 복원합니다.
-            self.num_classes = original_num_classes
-    
-        # --- 인코더 보조 손실 계산 (enc_aux_outputs) ---
+
+        # In case of encoder auxiliary losses. For rtdetr v2
         if 'enc_aux_outputs' in outputs:
             assert 'enc_meta' in outputs, ''
             class_agnostic = outputs['enc_meta']['class_agnostic']
-        
-            orig_num_classes_enc = self.num_classes
-            if not is_dsg_epoch:
-                self.num_classes = 2
-            elif class_agnostic:
-                self.num_classes = 1
-        
-            enc_targets = copy.deepcopy(targets)
             if class_agnostic:
+                orig_num_classes = self.num_classes
+                self.num_classes = 1
+                enc_targets = copy.deepcopy(targets)
                 for t in enc_targets:
                     t['labels'] = torch.zeros_like(t["labels"])
+            else:
+                enc_targets = targets
 
             for i, aux_outputs in enumerate(outputs['enc_aux_outputs']):
                 matched = self.matcher(aux_outputs, targets)
@@ -229,9 +212,9 @@ class RTDETRCriterionv2(nn.Module):
                     l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
                     l_dict = {k + f'_enc_{i}': v for k, v in l_dict.items()}
                     losses.update(l_dict)
-        
-            # 인코더 헤드 계산 후 num_classes를 복원합니다.
-            self.num_classes = orig_num_classes_enc
+            
+            if class_agnostic:
+                self.num_classes = orig_num_classes
 
         return losses
 
