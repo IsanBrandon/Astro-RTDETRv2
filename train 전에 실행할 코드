@@ -1,0 +1,2 @@
+훈련 스크립트 실행 전에 다음 명령어를 터미널에 입력하세요.
+export PYTORCH_CUDA_ALLOC_CONF="expandable_segments:True" 

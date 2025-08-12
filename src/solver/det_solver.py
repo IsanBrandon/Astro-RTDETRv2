@@ -17,24 +17,36 @@ class DetSolver(BaseSolver):
     
     def fit(self, ):
         print("Start training")
-        self.train()
+        self.train()  # 이 메서드에서 _solver.py의 train 메서드가 호출되지만,
+                      # 이제 해당 메서드에는 데이터로더 초기화 코드가 없습니다.
         args = self.cfg
 
         n_parameters = sum([p.numel() for p in self.model.parameters() if p.requires_grad])
         print(f'number of trainable parameters: {n_parameters}')
         
-        # BaseSolver의 패턴에 맞춰 두 데이터로더를 초기화합니다.
-        # Dsg 데이터셋을 위한 데이터로더
+        # 이제 fit 메서드에서 두 데이터로더를 명시적으로 초기화합니다.
+        # YAML 설정에서 직접 shuffle 값을 가져와야 합니다.
         self.train_dataloader_dsg = dist_utils.warp_loader(self.cfg.train_dataloader, 
-                                                            shuffle=self.cfg.train_dataloader.shuffle)
-        
-        # Dds 데이터셋을 위한 데이터로더
-        # rtdetrv2_multi_star_galaxies.yml 파일에 train_dataloader_dds라는 키를 추가했다고 가정합니다.
+                                                            shuffle=self.cfg.yaml_cfg['train_dataloader'].get('shuffle', True))
+
         self.train_dataloader_dds = dist_utils.warp_loader(self.cfg.train_dataloader_dds,
-                                                            shuffle=self.cfg.train_dataloader_dds.shuffle)
+                                                            shuffle=self.cfg.yaml_cfg['train_dataloader_dds'].get('shuffle', True))
+
+        self.val_dataloader = dist_utils.warp_loader(self.cfg.val_dataloader,
+                                                      shuffle=self.cfg.yaml_cfg['val_dataloader'].get('shuffle', False))
+        
+        # 👇 2. Mosaic 변환에 dataset 객체를 전달하는 로직을 추가합니다. 👇
+        # Dsg 데이터셋
+        transforms_dsg = self.train_dataloader_dsg.dataset.transforms
+        if hasattr(transforms_dsg, 'ops') and transforms_dsg.ops[0].__class__.__name__ == 'Mosaic':
+            transforms_dsg.ops[0].dataset = self.train_dataloader_dsg.dataset
+
+        # Dds 데이터셋
+        transforms_dds = self.train_dataloader_dds.dataset.transforms
+        if hasattr(transforms_dds, 'ops') and transforms_dds.ops[0].__class__.__name__ == 'Mosaic':
+            transforms_dds.ops[0].dataset = self.train_dataloader_dds.dataset
 
         best_stat = {'epoch': -1, }
-
         start_time = time.time()
         start_epcoch = self.last_epoch + 1
         
@@ -49,10 +61,6 @@ class DetSolver(BaseSolver):
                 current_dataloader = self.train_dataloader_dds
                 is_dsg_epoch = False
 
-            # self.train_dataloader.set_epoch(epoch)
-            # self.train_dataloader.dataset.set_epoch(epoch)
-            # if dist_utils.is_dist_available_and_initialized():
-            #     self.train_dataloader.sampler.set_epoch(epoch)
             if dist_utils.is_dist_available_and_initialized():
                 current_dataloader.sampler.set_epoch(epoch)
             

@@ -20,6 +20,8 @@ class YAMLConfig(BaseConfig):
         cfg = load_config(cfg_path)
         cfg = merge_dict(cfg, kwargs)
 
+        self._train_dataloader_dds = None
+
         self.yaml_cfg = copy.deepcopy(cfg) 
         
         for k in super().__dict__:
@@ -73,6 +75,13 @@ class YAMLConfig(BaseConfig):
         if self._train_dataloader is None and 'train_dataloader' in self.yaml_cfg:
             self._train_dataloader = self.build_dataloader('train_dataloader')
         return super().train_dataloader
+    
+    @property
+
+    def train_dataloader_dds(self, ) -> DataLoader:
+        if self._train_dataloader_dds is None and 'train_dataloader_dds' in self.yaml_cfg:
+            self._train_dataloader_dds = self.build_dataloader('train_dataloader_dds')
+        return self._train_dataloader_dds
 
     @property
     def val_dataloader(self, ) -> DataLoader:

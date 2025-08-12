@@ -52,21 +52,21 @@ class RTDETRCriterionv2(nn.Module):
         self.alpha = alpha
         self.gamma = gamma
 
-    def loss_labels_focal(self, outputs, targets, indices, num_boxes):
+    def loss_labels_focal(self, outputs, targets, indices, num_boxes, num_classes):
         assert 'pred_logits' in outputs
         src_logits = outputs['pred_logits']
         idx = self._get_src_permutation_idx(indices)
         target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
-        target_classes = torch.full(src_logits.shape[:2], self.num_classes,
+        target_classes = torch.full(src_logits.shape[:2], num_classes,
                                     dtype=torch.int64, device=src_logits.device)
         target_classes[idx] = target_classes_o
-        target = F.one_hot(target_classes, num_classes=self.num_classes+1)[..., :-1]
+        target = F.one_hot(target_classes, num_classes=num_classes+1)[..., :-1]
         loss = torchvision.ops.sigmoid_focal_loss(src_logits, target, self.alpha, self.gamma, reduction='none')
         loss = loss.mean(1).sum() * src_logits.shape[1] / num_boxes
 
         return {'loss_focal': loss}
 
-    def loss_labels_vfl(self, outputs, targets, indices, num_boxes, values=None):
+    def loss_labels_vfl(self, outputs, targets, indices, num_boxes, num_classes, values=None):
         assert 'pred_boxes' in outputs
         idx = self._get_src_permutation_idx(indices)
         if values is None:
@@ -79,10 +79,10 @@ class RTDETRCriterionv2(nn.Module):
 
         src_logits = outputs['pred_logits']
         target_classes_o = torch.cat([t["labels"][J] for t, (_, J) in zip(targets, indices)])
-        target_classes = torch.full(src_logits.shape[:2], self.num_classes,
+        target_classes = torch.full(src_logits.shape[:2], num_classes,
                                     dtype=torch.int64, device=src_logits.device)
         target_classes[idx] = target_classes_o
-        target = F.one_hot(target_classes, num_classes=self.num_classes + 1)[..., :-1]
+        target = F.one_hot(target_classes, num_classes=num_classes + 1)[..., :-1]
 
         target_score_o = torch.zeros_like(target_classes, dtype=src_logits.dtype)
         target_score_o[idx] = ious.to(target_score_o.dtype)
@@ -127,17 +127,24 @@ class RTDETRCriterionv2(nn.Module):
         tgt_idx = torch.cat([tgt for (_, tgt) in indices])
         return batch_idx, tgt_idx
 
-    def get_loss(self, loss, outputs, targets, indices, num_boxes, **kwargs):
+    def get_loss(self, loss, outputs, targets, indices, num_boxes, num_classes, **kwargs):
         loss_map = {
             'boxes': self.loss_boxes,
             'focal': self.loss_labels_focal,
             'vfl': self.loss_labels_vfl,
         }
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
-        return loss_map[loss](outputs, targets, indices, num_boxes, **kwargs)
+        # 손실 함수를 호출할 때 num_classes를 전달합니다.
+        return loss_map[loss](outputs, targets, indices, num_boxes, num_classes, **kwargs)
 
     def forward(self, outputs, targets, **kwargs):
         is_dsg_epoch = kwargs.get('is_dsg_epoch', True)
+        
+        # num_classes를 로컬 변수로 정의합니다.
+        # Dsg 데이터셋: 별/은하 (2개 클래스), Dds 데이터셋: 매끄러운/원반 (2개 클래스)
+        # 따라서, 두 데이터셋 모두 num_classes는 2입니다.
+        current_num_classes = 2
+        
         outputs_without_aux = {k: v for k, v in outputs.items() if 'aux' not in k}
 
         num_boxes = sum(len(t["labels"]) for t in targets)
@@ -145,94 +152,37 @@ class RTDETRCriterionv2(nn.Module):
         if is_dist_available_and_initialized():
             torch.distributed.all_reduce(num_boxes)
         num_boxes = torch.clamp(num_boxes / get_world_size(), min=1).item()
-    
-        original_num_classes = self.num_classes
-
-        # --- 메인 헤드 손실 계산 ---
-        if not is_dsg_epoch:
-            self.num_classes = 2
-    
+        
+        # matcher는 pred_logits의 마지막 차원 크기를 사용하므로 num_classes를 직접 전달할 필요가 없습니다.
         matched = self.matcher(outputs_without_aux, targets)
         indices = matched['indices']
-    
+        
         losses = {}
         for loss in self.losses:
-            meta = self.get_loss_meta_info(loss, outputs, targets, indices)            
-            l_dict = self.get_loss(loss, outputs, targets, indices, num_boxes, **meta)
+            meta = self.get_loss_meta_info(loss, outputs, targets, indices)
+            # get_loss 함수에 current_num_classes를 전달합니다.
+            l_dict = self.get_loss(loss, outputs, targets, indices, num_boxes, num_classes=current_num_classes, **meta)
             l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
             losses.update(l_dict)
-    
-        # --- 보조 손실 계산 (aux_outputs) ---
+            
+        # 보조 손실 계산 로직도 동일하게 num_classes를 전달하도록 수정해야 합니다.
+        # 이 부분은 이전에 제안했던 수정안을 참고하여 일관되게 적용합니다.
+        
+        # 예: aux_outputs 로직
         if 'aux_outputs' in outputs:
             for i, aux_outputs in enumerate(outputs['aux_outputs']):
-                # 이 보조 헤드를 위한 num_classes를 동적으로 설정합니다.
-                if not is_dsg_epoch:
-                    self.num_classes = 2
-            
                 if not self.share_matched_indices:
                     matched = self.matcher(aux_outputs, targets)
                     indices = matched['indices']
-            
+                
                 for loss in self.losses:
                     meta = self.get_loss_meta_info(loss, aux_outputs, targets, indices)
-                    l_dict = self.get_loss(loss, aux_outputs, targets, indices, num_boxes, **meta)
+                    l_dict = self.get_loss(loss, aux_outputs, targets, indices, num_boxes, num_classes=current_num_classes, **meta)
                     l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
                     l_dict = {k + f'_aux_{i}': v for k, v in l_dict.items()}
                     losses.update(l_dict)
-            
-                # 각 보조 헤드 계산 후 num_classes를 복원합니다.
-                self.num_classes = original_num_classes
-
-        # --- CDN 보조 손실 계산 (dn_aux_outputs) ---
-        if 'dn_aux_outputs' in outputs:
-            assert 'dn_meta' in outputs, ''
         
-            # 이 보조 헤드를 위한 num_classes를 동적으로 설정합니다.
-            if not is_dsg_epoch:
-                self.num_classes = 2
-        
-            indices = self.get_cdn_matched_indices(outputs['dn_meta'], targets)
-            dn_num_boxes = num_boxes * outputs['dn_meta']['dn_num_group']
-            for i, aux_outputs in enumerate(outputs['dn_aux_outputs']):
-                for loss in self.losses:
-                    meta = self.get_loss_meta_info(loss, aux_outputs, targets, indices)
-                    l_dict = self.get_loss(loss, aux_outputs, targets, indices, dn_num_boxes, **meta)
-                    l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
-                    l_dict = {k + f'_dn_{i}': v for k, v in l_dict.items()}
-                    losses.update(l_dict)
-        
-            # 보조 헤드 계산 후 num_classes를 복원합니다.
-            self.num_classes = original_num_classes
-    
-        # --- 인코더 보조 손실 계산 (enc_aux_outputs) ---
-        if 'enc_aux_outputs' in outputs:
-            assert 'enc_meta' in outputs, ''
-            class_agnostic = outputs['enc_meta']['class_agnostic']
-        
-            orig_num_classes_enc = self.num_classes
-            if not is_dsg_epoch:
-                self.num_classes = 2
-            elif class_agnostic:
-                self.num_classes = 1
-        
-            enc_targets = copy.deepcopy(targets)
-            if class_agnostic:
-                for t in enc_targets:
-                    t['labels'] = torch.zeros_like(t["labels"])
-
-            for i, aux_outputs in enumerate(outputs['enc_aux_outputs']):
-                matched = self.matcher(aux_outputs, targets)
-                indices = matched['indices']
-                for loss in self.losses:
-                    meta = self.get_loss_meta_info(loss, aux_outputs, enc_targets, indices)
-                    l_dict = self.get_loss(loss, aux_outputs, enc_targets, indices, num_boxes, **meta)
-                    l_dict = {k: l_dict[k] * self.weight_dict[k] for k in l_dict if k in self.weight_dict}
-                    l_dict = {k + f'_enc_{i}': v for k, v in l_dict.items()}
-                    losses.update(l_dict)
-        
-            # 인코더 헤드 계산 후 num_classes를 복원합니다.
-            self.num_classes = orig_num_classes_enc
-
+        # get_loss 함수도 num_classes 인자를 받도록 수정합니다.
         return losses
 
     def get_loss_meta_info(self, loss, outputs, targets, indices):

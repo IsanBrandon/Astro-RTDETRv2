@@ -1,11 +1,14 @@
 __include__: [
+  '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/datasets/Dsg/coco_detection.yml',
+  '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/datasets/Dds/coco_detection.yml',
   '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/configs/runtime.yml',
+  # The 'dataloader.yml' file is causing conflicts. It should be removed.
+  # '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/configs/rtdetrv2/include/dataloader.yml',
   '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/configs/rtdetrv2/include/optimizer.yml',
   '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/configs/rtdetrv2/include/rtdetrv2_r50vd.yml',
 ]
 
 output_dir: /home/uvll/Desktop/hyuk/rtdetrv2_pytorch/output/rtdetrv2_multi_star_galaxies
-num_classes: 2 
 
 optimizer:
   type: AdamW
@@ -23,19 +26,18 @@ optimizer:
 
 weight: /home/uvll/Desktop/hyuk/rtdetrv2_pytorch/weights/rtdetrv2_r50vd_6x_coco_ema.pth
 
-# Dsg 데이터셋 설정 (train_dataloader의 모든 설정을 명시적으로 작성)
+# Dsg 데이터셋 설정 (기존 train_dataloader를 오버라이드)
 train_dataloader:
   type: DataLoader
   dataset:
-    type: 'CocoDetection'
+    type: 'CocoDataset'
     img_folder: '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/datasets/Dsg/images/train2017'
     ann_file: '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/datasets/Dsg/annotations/instances_train2017.json'
     transforms:
-      type: 'Compose'
       ops:
-        - {type: Mosaic, size: [640, 640]}
         - {type: RandomPhotometricDistort, p: 0.5}
         - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
         - {type: SanitizeBoundingBoxes, min_size: 1}
         - {type: RandomHorizontalFlip}
         - {type: Resize, size: [640, 640]}
@@ -45,29 +47,28 @@ train_dataloader:
       policy:
         name: stop_epoch
         epoch: 71
-        ops: ['RandomPhotometricDistort', 'RandomZoomOut']
+        ops: ['RandomPhotometricDistort', 'RandomZoomOut', 'RandomIoUCrop']
   collate_fn:
     type: BatchImageCollateFuncion
     scales: [480, 512, 544, 576, 608, 640, 640, 640, 672, 704, 736, 768, 800]
     stop_epoch: 71
   shuffle: True
-  total_batch_size: 8
+  total_batch_size: 16
   num_workers: 4
   drop_last: True
 
-# Dds 데이터셋을 위한 새로운 데이터로더 설정 (모든 설정을 명시적으로 작성)
+# Dds 데이터셋을 위한 새로운 데이터로더 설정
 train_dataloader_dds:
   type: DataLoader
   dataset:
-    type: 'CocoDetection'
+    type: 'CocoDataset'
     img_folder: '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/datasets/Dds/images/train2017'
     ann_file: '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/datasets/Dds/annotations/instances_train2017.json'
     transforms:
-      type: 'Compose'
       ops:
-        - {type: Mosaic, size: [640, 640]}
         - {type: RandomPhotometricDistort, p: 0.5}
         - {type: RandomZoomOut, fill: 0}
+        - {type: RandomIoUCrop, p: 0.8}
         - {type: SanitizeBoundingBoxes, min_size: 1}
         - {type: RandomHorizontalFlip}
         - {type: Resize, size: [640, 640]}
@@ -77,36 +78,28 @@ train_dataloader_dds:
       policy:
         name: stop_epoch
         epoch: 71
-        ops: ['RandomPhotometricDistort', 'RandomZoomOut']
+        ops: ['RandomPhotometricDistort', 'RandomZoomOut', 'RandomIoUCrop']
   collate_fn:
     type: BatchImageCollateFuncion
     scales: [480, 512, 544, 576, 608, 640, 640, 640, 672, 704, 736, 768, 800]
     stop_epoch: 71
   shuffle: True
-  total_batch_size: 8
+  total_batch_size: 16
   num_workers: 4
   drop_last: True
 
-# 검증용 데이터로더 (모든 설정을 명시적으로 작성)
+# 검증용 데이터로더는 Dsg 데이터셋으로 그대로 사용
 val_dataloader:
   type: DataLoader
   dataset:
-    type: 'CocoDetection'
+    type: 'CocoDataset'
     img_folder: '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/datasets/Dsg/images/val2017'
     ann_file: '/home/uvll/Desktop/hyuk/rtdetrv2_pytorch/datasets/Dsg/annotations/instances_val2017.json'
     transforms:
-      type: 'Compose'
       ops:
         - {type: Resize, size: [640, 640]}
         - {type: ConvertPILImage, dtype: 'float32', scale: True}
-  collate_fn:
-    type: BatchImageCollateFuncion
   shuffle: False
   total_batch_size: 16
   num_workers: 4
   drop_last: False
-
-
-evaluator:
-  type: CocoEvaluator
-  iou_types: ['bbox']
