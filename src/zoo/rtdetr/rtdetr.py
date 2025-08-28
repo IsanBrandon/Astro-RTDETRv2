@@ -22,23 +22,23 @@ class RTDETR(nn.Module):
     def __init__(self, \
         backbone: nn.Module, 
         encoder: nn.Module, 
-        decoder: nn.Module,
+        decoder: nn.Module, 
     ):
         super().__init__()
         self.backbone = backbone
         self.decoder = decoder
         self.encoder = encoder
         
-    def forward(self, x, targets=None, data_type=None, is_dsg_epoch=True):
-        # x: 이전 단계로부터의 백본 피처
+    def forward(self, x, targets=None):
         x = self.backbone(x)
-        
-        # x: 인코더 출력
         x = self.encoder(x)        
-        
-        # out: 디코더 출력
-        # 디코더의 forward 메서드는 이제 is_dsg_epoch 플래그를 기반으로 올바른 헤드를
-        # 선택하는 역할을 담당합니다. 출력에는 현재 훈련 작업에 맞는 로그잇이 포함될 것입니다.
-        out = self.decoder(x, targets, is_dsg_epoch=is_dsg_epoch)
-        
-        return out
+        x = self.decoder(x, targets)
+
+        return x
+    
+    def deploy(self, ):
+        self.eval()
+        for m in self.modules():
+            if hasattr(m, 'convert_to_deploy'):
+                m.convert_to_deploy()
+        return self 

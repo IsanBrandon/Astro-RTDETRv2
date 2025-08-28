@@ -2,10 +2,7 @@
 datasets/
 
 # Checkpoints and logs
-output/
-weights/*.pth
-*.pth
-*.pt
+
 
 # Environment files
 .conda/
@@ -17,3 +14,7 @@ __pycache__/
 .DS_Store
 .ipynb_checkpoints/
 *.log
+
+dataset/Dsg/train2017/
+dataset/Dsg/val2017/
+

@@ -38,9 +38,7 @@ class Mosaic(T.Transform):
             images.append(image)
             targets.append(target)
 
-        # h, w = F.get_spatial_size(images[0])
-        # 이미지 크기를 PIL Image의 .size 속성으로 가져옵니다.
-        w, h = images[0].size
+        h, w = F.get_spatial_size(images[0])
         offset = [[0, 0], [w, 0], [0, h], [w, h]]
         image = Image.new(mode=images[0].mode, size=(w * 2, h * 2), color=0)
         for i, im in enumerate(images):

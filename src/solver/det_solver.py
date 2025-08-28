@@ -11,67 +11,37 @@ from ..misc import dist_utils, profiler_utils
 
 from ._solver import BaseSolver
 from .det_engine import train_one_epoch, evaluate
-
+from ..misc.visualizer import visualize_batch_predictions
 
 class DetSolver(BaseSolver):
     
     def fit(self, ):
         print("Start training")
-        self.train()  # 이 메서드에서 _solver.py의 train 메서드가 호출되지만,
-                      # 이제 해당 메서드에는 데이터로더 초기화 코드가 없습니다.
+        self.train()
         args = self.cfg
 
         n_parameters = sum([p.numel() for p in self.model.parameters() if p.requires_grad])
         print(f'number of trainable parameters: {n_parameters}')
-        
-        # 이제 fit 메서드에서 두 데이터로더를 명시적으로 초기화합니다.
-        # YAML 설정에서 직접 shuffle 값을 가져와야 합니다.
-        self.train_dataloader_dsg = dist_utils.warp_loader(self.cfg.train_dataloader, 
-                                                            shuffle=self.cfg.yaml_cfg['train_dataloader'].get('shuffle', True))
-
-        self.train_dataloader_dds = dist_utils.warp_loader(self.cfg.train_dataloader_dds,
-                                                            shuffle=self.cfg.yaml_cfg['train_dataloader_dds'].get('shuffle', True))
-
-        self.val_dataloader = dist_utils.warp_loader(self.cfg.val_dataloader,
-                                                      shuffle=self.cfg.yaml_cfg['val_dataloader'].get('shuffle', False))
-        
-        # 👇 2. Mosaic 변환에 dataset 객체를 전달하는 로직을 추가합니다. 👇
-        # Dsg 데이터셋
-        transforms_dsg = self.train_dataloader_dsg.dataset.transforms
-        if hasattr(transforms_dsg, 'ops') and transforms_dsg.ops[0].__class__.__name__ == 'Mosaic':
-            transforms_dsg.ops[0].dataset = self.train_dataloader_dsg.dataset
-
-        # Dds 데이터셋
-        transforms_dds = self.train_dataloader_dds.dataset.transforms
-        if hasattr(transforms_dds, 'ops') and transforms_dds.ops[0].__class__.__name__ == 'Mosaic':
-            transforms_dds.ops[0].dataset = self.train_dataloader_dds.dataset
 
         best_stat = {'epoch': -1, }
+
         start_time = time.time()
         start_epcoch = self.last_epoch + 1
         
         for epoch in range(start_epcoch, args.epoches):
-            # 교대 훈련 로직
-            if epoch % 2 == 0:
-                # 짝수 에포크: Dsg 데이터셋으로 훈련 (star vs galaxy)
-                current_dataloader = self.train_dataloader_dsg
-                is_dsg_epoch = True
-            else:
-                # 홀수 에포크: Dds 데이터셋으로 훈련 (smooth vs disk)
-                current_dataloader = self.train_dataloader_dds
-                is_dsg_epoch = False
 
+            self.train_dataloader.set_epoch(epoch)
+            # self.train_dataloader.dataset.set_epoch(epoch)
             if dist_utils.is_dist_available_and_initialized():
-                current_dataloader.sampler.set_epoch(epoch)
+                self.train_dataloader.sampler.set_epoch(epoch)
             
             train_stats = train_one_epoch(
                 self.model, 
                 self.criterion, 
-                current_dataloader,  # 선택된 데이터로더를 사용
+                self.train_dataloader, 
                 self.optimizer, 
                 self.device, 
                 epoch, 
-                is_dsg_epoch=is_dsg_epoch, # is_dsg_epoch 플래그 전달
                 max_norm=args.clip_max_norm, 
                 print_freq=args.print_freq, 
                 ema=self.ema, 
@@ -93,16 +63,46 @@ class DetSolver(BaseSolver):
                 for checkpoint_path in checkpoint_paths:
                     dist_utils.save_on_master(self.state_dict(), checkpoint_path)
 
-            # 평가 시에는 Dsg 데이터셋으로 평가를 진행합니다.
             module = self.ema.module if self.ema else self.model
             test_stats, coco_evaluator = evaluate(
-                module, 
-                self.criterion, 
-                self.postprocessor, 
-                self.val_dataloader,    # Dsg 데이터셋을 사용하여 평가
-                self.evaluator, 
+                module,
+                self.criterion,
+                self.postprocessor,
+                self.val_dataloader,
+                self.evaluator,
                 self.device
             )
+
+            # === 여기서부터 추가: 매 10에폭마다 시각화 저장 ===
+            try:
+                vis_every = 10
+                if (epoch + 1) % vis_every == 0 and dist_utils.is_main_process():
+                    if self.val_dataloader is not None:
+                        module.eval()
+                        val_iter = iter(self.val_dataloader)
+                        batch = next(val_iter)
+                        images = batch[0] if isinstance(batch, (list, tuple)) else batch
+
+                        save_dir = self.output_dir / f"vis_epoch_{epoch+1:03d}"
+                        class_names = ('galaxy', 'star')  # 0=galaxy, 1=star
+                        visualize_batch_predictions(
+                            model=module,
+                            postprocessor=self.postprocessor,
+                            batch_images=images,
+                            device=self.device,
+                            save_dir=str(save_dir),
+                            class_names=class_names,
+                            score_thr=0.4,
+                            max_images=16
+                        )
+                        print(f"[VIS] saved: {save_dir}")
+            except StopIteration:
+                if dist_utils.is_main_process():
+                    print("[VIS] val_dataloader is empty; skip visualization.")
+            except Exception as e:
+                if dist_utils.is_main_process():
+                    print(f"[VIS] visualization failed: {e}")
+            # === 추가 끝 ===
 
             # TODO 
             for k in test_stats:

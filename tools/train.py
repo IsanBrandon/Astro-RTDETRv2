@@ -11,16 +11,6 @@ from src.misc import dist_utils
 from src.core import YAMLConfig, yaml_utils
 from src.solver import TASKS
 
-# --- 여기에 필요한 모듈들을 명시적으로 import합니다. ---
-# 이전에 YAML 파일에서 제거했던 dataloader.yml에 정의된 클래스들도 포함해야 합니다.
-from src.data.dataset.coco_dataset import CocoDetection
-from src.data.dataloader import DataLoader, BatchImageCollateFuncion
-from src.data.transforms import Compose, RandomPhotometricDistort, RandomZoomOut, RandomIoUCrop, SanitizeBoundingBoxes, RandomHorizontalFlip, Resize, ConvertPILImage, ConvertBoxes
-from src.zoo.rtdetr import RTDETR, RTDETRCriterionv2, RTDETRPostProcessor
-from src.zoo.rtdetr.rtdetrv2_decoder import RTDETRTransformerv2
-from src.nn.backbone.presnet import PResNet
-from src.zoo.rtdetr.hybrid_encoder import HybridEncoder
-from src.zoo.rtdetr.matcher import HungarianMatcher
 
 def main(args, ) -> None:
     """main

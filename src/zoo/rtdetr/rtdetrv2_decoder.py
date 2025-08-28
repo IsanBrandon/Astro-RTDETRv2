@@ -249,18 +249,13 @@ class TransformerDecoder(nn.Module):
                 memory,
                 memory_spatial_shapes,
                 bbox_head,
-                score_head_dsg,  # Dsg용 헤드를 명시적으로 지정
-                score_head_dds,  # Dds용 헤드를 추가
+                score_head,
                 query_pos_head,
                 attn_mask=None,
-                memory_mask=None,
-                is_dsg_epoch=True): # 새로운 플래그 추가
+                memory_mask=None):
         dec_out_bboxes = []
         dec_out_logits = []
         ref_points_detach = F.sigmoid(ref_points_unact)
-        
-        # 플래그에 따라 올바른 score head를 선택
-        current_score_head = score_head_dsg if is_dsg_epoch else score_head_dds
 
         output = target
         for i, layer in enumerate(self.layers):
@@ -272,24 +267,21 @@ class TransformerDecoder(nn.Module):
             inter_ref_bbox = F.sigmoid(bbox_head[i](output) + inverse_sigmoid(ref_points_detach))
 
             if self.training:
-                # 선택된 score head를 사용하여 로그잇을 계산
-                dec_out_logits.append(current_score_head[i](output))
+                dec_out_logits.append(score_head[i](output))
                 if i == 0:
                     dec_out_bboxes.append(inter_ref_bbox)
                 else:
                     dec_out_bboxes.append(F.sigmoid(bbox_head[i](output) + inverse_sigmoid(ref_points)))
 
             elif i == self.eval_idx:
-                # 선택된 score head를 사용하여 로그잇을 계산
-                dec_out_logits.append(current_score_head[i](output))
+                dec_out_logits.append(score_head[i](output))
                 dec_out_bboxes.append(inter_ref_bbox)
                 break
 
             ref_points = inter_ref_bbox
             ref_points_detach = inter_ref_bbox.detach()
 
-        # 이 반환문을 수정하여 최종 output 텐서를 포함시킵니다.
-        return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits), output
+        return torch.stack(dec_out_bboxes), torch.stack(dec_out_logits)
 
 
 @register()
@@ -381,16 +373,11 @@ class RTDETRTransformerv2(nn.Module):
         self.enc_bbox_head = MLP(hidden_dim, hidden_dim, 4, 3)
 
         # decoder head
-        # Renamed for clarity: dsg is star/galaxy
-        self.dec_score_head_dsg = nn.ModuleList([
+        self.dec_score_head = nn.ModuleList([
             nn.Linear(hidden_dim, num_classes) for _ in range(num_layers)
         ])
         self.dec_bbox_head = nn.ModuleList([
             MLP(hidden_dim, hidden_dim, 4, 3) for _ in range(num_layers)
-        ])
-        # Add a new head for dds (smooth/disk)
-        self.dec_score_head_dds = nn.ModuleList([
-            nn.Linear(hidden_dim, 2) for _ in range(num_layers)
         ])
 
         # init encoder output anchors and valid_mask
@@ -407,15 +394,10 @@ class RTDETRTransformerv2(nn.Module):
         init.constant_(self.enc_bbox_head.layers[-1].weight, 0)
         init.constant_(self.enc_bbox_head.layers[-1].bias, 0)
 
-        # Initialize the Dsg score head and the bbox head
-        for _cls, _reg in zip(self.dec_score_head_dsg, self.dec_bbox_head):
+        for _cls, _reg in zip(self.dec_score_head, self.dec_bbox_head):
             init.constant_(_cls.bias, bias)
             init.constant_(_reg.layers[-1].weight, 0)
             init.constant_(_reg.layers[-1].bias, 0)
-            
-        # Initialize the new Dds score head
-        for _cls in self.dec_score_head_dds:
-            init.constant_(_cls.bias, bias)
         
         init.xavier_uniform_(self.enc_output[0].weight)
         if self.learn_query_content:
@@ -569,7 +551,7 @@ class RTDETRTransformerv2(nn.Module):
         return topk_memory, topk_logits, topk_coords
 
 
-    def forward(self, feats, targets=None, is_dsg_epoch=True):  # new argument for dsg epoch
+    def forward(self, feats, targets=None):
         # input projection and embedding
         memory, spatial_shapes = self._get_encoder_input(feats)
         
@@ -590,18 +572,15 @@ class RTDETRTransformerv2(nn.Module):
             self._get_decoder_input(memory, spatial_shapes, denoising_logits, denoising_bbox_unact)
 
         # decoder
-        # 이제 디코더가 세 가지 값을 반환합니다.
-        out_bboxes, out_logits, query_features = self.decoder(
+        out_bboxes, out_logits = self.decoder(
             init_ref_contents,
             init_ref_points_unact,
             memory,
             spatial_shapes,
             self.dec_bbox_head,
-            self.dec_score_head_dsg,  # Pass the Dsg head
-            self.dec_score_head_dds,  # Pass the Dds head
+            self.dec_score_head,
             self.query_pos_head,
-            attn_mask=attn_mask,
-            is_dsg_epoch=is_dsg_epoch)  # Pass the new flag
+            attn_mask=attn_mask)
 
         if self.training and dn_meta is not None:
             dn_out_bboxes, out_bboxes = torch.split(out_bboxes, dn_meta['dn_num_split'], dim=2)
@@ -618,9 +597,6 @@ class RTDETRTransformerv2(nn.Module):
                 out['dn_aux_outputs'] = self._set_aux_loss(dn_out_logits, dn_out_bboxes)
                 out['dn_meta'] = dn_meta
 
-        # 이 부분을 수정하여 query_features를 반환합니다.
-        # 이 텐서를 rtdetr.py에서 사용할 것입니다.
-        out['query_features'] = query_features
         return out
 
 
